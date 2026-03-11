@@ -28,14 +28,17 @@ def callback():
         handler.handle(body, request.headers.get('X-Line-Signature', ''))
     except Exception:
         # หาก Signature ไม่ผ่าน ให้บังคับรันเพื่อไม่ให้บอท "ไม่อ่านไลน์"
-        data = json.loads(body)
-        for event in data.get('events', []):
-            if event['type'] == 'message':
-                class DummyEvent:
-                    def __init__(self, e):
-                        self.reply_token = e['replyToken']
-                        self.message = type('obj', (object,), {'text': e['message']['text']})
-                handle_message(DummyEvent(event))
+        try:
+            data = json.loads(body)
+            for event in data.get('events', []):
+                if event['type'] == 'message':
+                    class DummyEvent:
+                        def __init__(self, e):
+                            self.reply_token = e['replyToken']
+                            self.message = type('obj', (object,), {'text': e['message']['text']})
+                    handle_message(DummyEvent(event))
+        except Exception as e:
+            print(f"Error in bypass handler: {e}")
     return 'OK'
 
 @handler.add(MessageEvent, message=TextMessageContent)
@@ -44,7 +47,7 @@ def handle_message(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         try:
-            # 📊 ดึงข้อมูลหุ้น (ปรับปรุงให้ดึงย้อนหลัง 7 วันเพื่อป้องกันค่าว่างในช่วงวันหยุด)
+            # 📊 ดึงข้อมูลหุ้นย้อนหลัง 7 วัน
             stock = yf.Ticker(user_text)
             hist = stock.history(period="7d")
             
@@ -63,8 +66,9 @@ def handle_message(event):
                          f"ที่มีพื้นฐานวิศวกรรมและต้องการอิสรภาพทางการเงิน "
                          f"เน้นวิเคราะห์ความคุ้มค่าของปันผลและความเสี่ยงในระยะยาวครับ")
 
-		response = client.models.generate_content(model="models/gemini-1.5-flash", contents=prompt)
-		
+                # แก้ไขชื่อรุ่นเป็น models/gemini-1.5-flash เพื่อป้องกัน 404
+                response = client.models.generate_content(model="models/gemini-1.5-flash", contents=prompt)
+                
                 reply_text = f"[📊 AI Wealth Analysis]\n{asset_info}\n\n{response.text}"
                 
         except Exception as e:
@@ -78,5 +82,6 @@ def handle_message(event):
         )
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    # รันบน Port ที่ Render กำหนด
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
