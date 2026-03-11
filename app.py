@@ -62,8 +62,9 @@ def handle_message(event):
                          f"สำหรับพอร์ตเน้นเงินปันผล (Cycle 1) ของนักลงทุนอายุ 46 ปี "
                          f"ที่มีพื้นฐานวิศวกรรมและต้องการอิสรภาพทางการเงิน "
                          f"เน้นวิเคราะห์ความคุ้มค่าของปันผลและความเสี่ยงในระยะยาวครับ")
-                
-                response = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
+
+		response = client.models.generate_content(model="models/gemini-1.5-flash", contents=prompt)
+		
                 reply_text = f"[📊 AI Wealth Analysis]\n{asset_info}\n\n{response.text}"
                 
         except Exception as e:
