@@ -44,35 +44,30 @@ def handle_message(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         try:
-            # 📊 ดึงข้อมูลหุ้นย้อนหลังเพื่อความเสถียร
             stock = yf.Ticker(user_text)
-            hist = stock.history(period="5d")
+            hist = stock.history(period="7d")
             
             if hist.empty:
                 reply_text = f"คุณ Auttawut ครับ ผมหาหุ้น '{user_text}' ไม่เจอ ลองเช็กชื่อย่ออีกครั้งนะครับ"
             else:
                 current_price = hist['Close'].iloc[-1]
                 asset_info = f"{user_text}: ${current_price:.2f}"
-                
-                # 🤖 เรียกใช้ Gemini (ระบุชื่อรุ่นแบบสมบูรณ์)
                 prompt = (f"ในฐานะที่ปรึกษาการลงทุน ช่วยวิเคราะห์หุ้น {asset_info} "
                          f"สำหรับพอร์ตเน้นเงินปันผล (Cycle 1) ของนักลงทุนอายุ 46 ปี "
                          f"ที่มีพื้นฐานวิศวกรรมและต้องการอิสรภาพทางการเงินครับ")
 
-                # ปรับการเรียกใช้ model ให้ครอบคลุมทุกเวอร์ชันของ SDK
-                response = client.models.generate_content(
-                    model="gemini-1.5-flash", 
-                    contents=prompt
-                )
+                # --- 🤖 ระบบเรียก Gemini แบบ Hybrid (แก้ปัญหา 404) ---
+                try:
+                    # ลองแบบที่ 1: ใส่ models/ นำหน้า
+                    response = client.models.generate_content(model="models/gemini-1.5-flash", contents=prompt)
+                except Exception:
+                    # ลองแบบที่ 2: ใส่แค่ชื่อรุ่น
+                    response = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
                 
-                if response and response.text:
-                    reply_text = f"[📊 AI Analysis]\n{asset_info}\n\n{response.text}"
-                else:
-                    reply_text = f"ขออภัยครับคุณ Auttawut Gemini ประมวลผลสำเร็จแต่ไม่ส่งข้อความกลับมา"
+                reply_text = f"[📊 AI Analysis]\n{asset_info}\n\n{response.text}"
                 
         except Exception as e:
-            # แสดง Error สั้นๆ เพื่อให้เราใช้วิเคราะห์ต่อได้หากยังติดปัญหา
-            reply_text = f"ระบบขัดข้องชั่วคราว: {str(e)[:50]}"
+            reply_text = f"ขออภัยครับคุณ Auttawut ระบบ Gemini แจ้ง Error: {str(e)[:100]}"
 
         line_bot_api.reply_message(
             ReplyMessageRequest(
