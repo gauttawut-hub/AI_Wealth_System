@@ -22,12 +22,9 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 @app.route("/callback", methods=['POST'])
 def callback():
     body = request.get_data(as_text=True)
-    # --- 🚀 ระบบ Bypass Signature เพื่อความเสถียรบน Render ---
     try:
-        # พยายามใช้งานแบบปกติก่อน
         handler.handle(body, request.headers.get('X-Line-Signature', ''))
     except Exception:
-        # หาก Signature ไม่ผ่าน ให้บังคับรันเพื่อไม่ให้บอท "ไม่อ่านไลน์"
         try:
             data = json.loads(body)
             for event in data.get('events', []):
@@ -37,8 +34,8 @@ def callback():
                             self.reply_token = e['replyToken']
                             self.message = type('obj', (object,), {'text': e['message']['text']})
                     handle_message(DummyEvent(event))
-        except Exception as e:
-            print(f"Error in bypass handler: {e}")
+        except Exception:
+            pass
     return 'OK'
 
 @handler.add(MessageEvent, message=TextMessageContent)
@@ -47,32 +44,30 @@ def handle_message(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         try:
-            # 📊 ดึงข้อมูลหุ้นย้อนหลัง 7 วัน
+            # 📊 ดึงข้อมูลหุ้น
             stock = yf.Ticker(user_text)
             hist = stock.history(period="7d")
             
             if hist.empty:
-                reply_text = f"คุณ Auttawut ครับ ผมหาหุ้น '{user_text}' ไม่เจอ หรือข้อมูลยังไม่อัปเดต ลองเช็กชื่อย่ออีกครั้งนะครับ"
+                reply_text = f"คุณ Auttawut ครับ ผมหาหุ้น '{user_text}' ไม่เจอ ลองเช็กชื่อย่ออีกครั้งนะครับ"
             else:
                 current_price = hist['Close'].iloc[-1]
-                prev_price = hist['Close'].iloc[-2] if len(hist) > 1 else current_price
-                change = current_price - prev_price
+                asset_info = f"{user_text}: ${current_price:.2f}"
                 
-                asset_info = f"{user_text}: ${current_price:.2f} ({'+' if change >= 0 else ''}{change:.2f})"
-                
-                # 🤖 ส่งต่อให้ Gemini วิเคราะห์ตามโปรไฟล์คุณ Auttawut
-                prompt = (f"ในฐานะที่ปรึกษาการลงทุน ช่วยวิเคราะห์หุ้น {asset_info} "
-                         f"สำหรับพอร์ตเน้นเงินปันผล (Cycle 1) ของนักลงทุนอายุ 46 ปี "
-                         f"ที่มีพื้นฐานวิศวกรรมและต้องการอิสรภาพทางการเงิน "
-                         f"เน้นวิเคราะห์ความคุ้มค่าของปันผลและความเสี่ยงในระยะยาวครับ")
+                # 🤖 เรียกใช้ Gemini (ใช้ชื่อรุ่นแบบมาตรฐาน SDK)
+                prompt = (f"วิเคราะห์หุ้น {asset_info} สำหรับพอร์ตปันผล Cycle 1 "
+                         f"ของนักลงทุนอายุ 46 ปี พื้นฐานวิศวกรรม เน้นความคุ้มค่าระยะยาว")
 
-                # แก้ไขชื่อรุ่นเป็น models/gemini-1.5-flash เพื่อป้องกัน 404
-                response = client.models.generate_content(model="models/gemini-1.5-flash", contents=prompt)
+                # ปรับชื่อรุ่นกลับเป็นชื่อมาตรฐานของ SDK
+                response = client.models.generate_content(
+                    model="gemini-1.5-flash", 
+                    contents=prompt
+                )
                 
-                reply_text = f"[📊 AI Wealth Analysis]\n{asset_info}\n\n{response.text}"
+                reply_text = f"[📊 AI Analysis]\n{asset_info}\n\n{response.text}"
                 
         except Exception as e:
-            reply_text = f"ขออภัยครับคุณ Auttawut ระบบขัดข้องขณะดึงข้อมูล '{user_text}': {str(e)}"
+            reply_text = f"ขออภัยครับคุณ Auttawut ระบบ Gemini ขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง"
 
         line_bot_api.reply_message(
             ReplyMessageRequest(
@@ -82,6 +77,5 @@ def handle_message(event):
         )
 
 if __name__ == "__main__":
-    # รันบน Port ที่ Render กำหนด
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
