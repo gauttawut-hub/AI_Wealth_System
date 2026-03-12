@@ -9,7 +9,7 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-# --- 🔑 Environment Variables ---
+# --- 🔑 Environment Variables (ใช้ OpenAI เท่านั้น) ---
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -24,7 +24,7 @@ def callback():
     try:
         handler.handle(body, request.headers.get('X-Line-Signature', ''))
     except Exception:
-        # Bypass Signature เพื่อความชัวร์บน Render
+        # Bypass สำหรับทดสอบ
         data = json.loads(body)
         for event in data.get('events', []):
             if event['type'] == 'message':
@@ -40,17 +40,17 @@ def handle_message(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         try:
-            # 📊 ดึงราคาปัจจุบัน
+            # 📊 ดึงราคาหุ้น
             stock = yf.Ticker(user_text)
             price = stock.fast_info['last_price']
             asset_info = f"{user_text}: ${price:.2f}"
             
-            # 🤖 เรียกใช้ GPT-4o วิเคราะห์ระดับพรีเมียม
+            # 🤖 เรียกใช้ GPT-4o (สมองใหม่ที่เติมเงินแล้ว)
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": "คุณคือที่ปรึกษาการลงทุนอัจฉริยะ วิเคราะห์หุ้นปันผลพอร์ต Cycle 1 สำหรับคุณ Auttawut วิศวกรวัย 46 ปี เน้นความคุ้มค่าและอิสรภาพทางการเงิน"},
-                    {"role": "user", "content": f"ช่วยวิเคราะห์หุ้น {asset_info} สั้นๆ ว่าน่าสนใจสำหรับสะสมเพิ่มไหม?"}
+                    {"role": "system", "content": "คุณคือที่ปรึกษาการลงทุนพอร์ตปันผล Cycle 1 ของวิศวกรวัย 46 ปี"},
+                    {"role": "user", "content": f"หุ้น {asset_info} วิเคราะห์สั้นๆ สำหรับสะสมเพิ่ม"}
                 ]
             )
             reply_text = f"[🏆 Wealth Insights]\n{asset_info}\n\n{response.choices[0].message.content}"
