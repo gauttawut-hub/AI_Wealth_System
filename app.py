@@ -44,6 +44,7 @@ def handle_message(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         try:
+            # 📊 ดึงข้อมูลหุ้น
             stock = yf.Ticker(user_text)
             hist = stock.history(period="7d")
             
@@ -56,18 +57,18 @@ def handle_message(event):
                          f"สำหรับพอร์ตเน้นเงินปันผล (Cycle 1) ของนักลงทุนอายุ 46 ปี "
                          f"ที่มีพื้นฐานวิศวกรรมและต้องการอิสรภาพทางการเงินครับ")
 
-                # --- 🤖 ระบบเรียก Gemini แบบ Hybrid (แก้ปัญหา 404) ---
+                # --- 🤖 เปลี่ยนมาใช้ Gemini 2.0 Flash เพื่อความเสถียร ---
                 try:
-                    # ลองแบบที่ 1: ใส่ models/ นำหน้า
-                    response = client.models.generate_content(model="models/gemini-1.5-flash", contents=prompt)
-                except Exception:
-                    # ลองแบบที่ 2: ใส่แค่ชื่อรุ่น
-                    response = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
-                
-                reply_text = f"[📊 AI Analysis]\n{asset_info}\n\n{response.text}"
+                    response = client.models.generate_content(
+                        model="gemini-2.0-flash", 
+                        contents=prompt
+                    )
+                    reply_text = f"[📊 AI Analysis]\n{asset_info}\n\n{response.text}"
+                except Exception as ai_err:
+                    reply_text = f"ระบบวิเคราะห์ขัดข้อง (AI Error): {str(ai_err)[:100]}"
                 
         except Exception as e:
-            reply_text = f"ขออภัยครับคุณ Auttawut ระบบ Gemini แจ้ง Error: {str(e)[:100]}"
+            reply_text = f"ระบบดึงข้อมูลขัดข้อง: {str(e)[:100]}"
 
         line_bot_api.reply_message(
             ReplyMessageRequest(
