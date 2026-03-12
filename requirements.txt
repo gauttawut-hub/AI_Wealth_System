@@ -3,3 +3,4 @@ line-bot-sdk
 yfinance
 google-genai
 gunicorn
+openai
