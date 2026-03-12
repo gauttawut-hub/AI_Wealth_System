@@ -10,7 +10,7 @@ from google import genai
 
 app = Flask(__name__)
 
-# --- 🔑 Environment Variables ---
+# --- 🔑 Environment Variables (ดึงค่าจากระบบ ไม่ใส่รหัสจริงในนี้) ---
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -57,25 +57,22 @@ def handle_message(event):
                          f"สำหรับพอร์ตเน้นเงินปันผล (Cycle 1) ของนักลงทุนอายุ 46 ปี "
                          f"ที่มีพื้นฐานวิศวกรรมและต้องการอิสรภาพทางการเงินครับ")
 
-                # --- 🤖 เปลี่ยนมาใช้ Gemini 2.0 Flash เพื่อความเสถียร ---
-                try:
-                    response = client.models.generate_content(
-                        model="gemini-2.0-flash", 
-                        contents=prompt
-                    )
-                    reply_text = f"[📊 AI Analysis]\n{asset_info}\n\n{response.text}"
-                except Exception as ai_err:
-                    reply_text = f"ระบบวิเคราะห์ขัดข้อง (AI Error): {str(ai_err)[:100]}"
+                # --- 🤖 เรียกใช้ Gemini 2.0 Flash ---
+                response = client.models.generate_content(
+                    model="gemini-2.0-flash", 
+                    contents=prompt
+                )
+                reply_text = f"[📊 AI Analysis]\n{asset_info}\n\n{response.text}"
                 
         except Exception as e:
-            reply_text = f"ระบบดึงข้อมูลขัดข้อง: {str(e)[:100]}"
+            reply_text = f"ระบบวิเคราะห์ขัดข้อง: {str(e)[:100]}"
 
-        line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=reply_text)]
-            )
+    line_bot_api.reply_message(
+        ReplyMessageRequest(
+            reply_token=event.reply_token,
+            messages=[TextMessage(text=reply_text)]
         )
+    )
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
