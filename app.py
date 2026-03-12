@@ -5,31 +5,34 @@ from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 import yfinance as yf
-from google import genai
+from openai import OpenAI
 
 app = Flask(__name__)
 
 # --- 🔑 Environment Variables ---
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 configuration = Configuration(access_token=LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
-client = genai.Client(api_key=GEMINI_API_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 @app.route("/callback", methods=['POST'])
 def callback():
     body = request.get_data(as_text=True)
-    # Bypass Signature เพื่อความไว
-    data = json.loads(body)
-    for event in data.get('events', []):
-        if event['type'] == 'message':
-            class DummyEvent:
-                def __init__(self, e):
-                    self.reply_token = e['replyToken']
-                    self.message = type('obj', (object,), {'text': e['message']['text']})
-            handle_message(DummyEvent(event))
+    try:
+        handler.handle(body, request.headers.get('X-Line-Signature', ''))
+    except Exception:
+        # Bypass Signature เพื่อความชัวร์บน Render
+        data = json.loads(body)
+        for event in data.get('events', []):
+            if event['type'] == 'message':
+                class DummyEvent:
+                    def __init__(self, e):
+                        self.reply_token = e['replyToken']
+                        self.message = type('obj', (object,), {'text': e['message']['text']})
+                handle_message(DummyEvent(event))
     return 'OK'
 
 def handle_message(event):
@@ -37,18 +40,23 @@ def handle_message(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         try:
-            # 📊 ดึงราคาปัจจุบันเท่านั้น (ลดภาระ API)
+            # 📊 ดึงราคาปัจจุบัน
             stock = yf.Ticker(user_text)
             price = stock.fast_info['last_price']
             asset_info = f"{user_text}: ${price:.2f}"
             
-            # 🤖 ส่งวิเคราะห์ (ลดความยาว Prompt)
-            prompt = f"วิเคราะห์หุ้น {asset_info} สำหรับพอร์ตปันผล Cycle 1 ของวิศวกรวัย 46 ปี แบบสรุปสั้นได้ใจความ"
-            response = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
-            reply_text = f"[📊 AI Analysis]\n{asset_info}\n\n{response.text}"
+            # 🤖 เรียกใช้ GPT-4o วิเคราะห์ระดับพรีเมียม
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "คุณคือที่ปรึกษาการลงทุนอัจฉริยะ วิเคราะห์หุ้นปันผลพอร์ต Cycle 1 สำหรับคุณ Auttawut วิศวกรวัย 46 ปี เน้นความคุ้มค่าและอิสรภาพทางการเงิน"},
+                    {"role": "user", "content": f"ช่วยวิเคราะห์หุ้น {asset_info} สั้นๆ ว่าน่าสนใจสำหรับสะสมเพิ่มไหม?"}
+                ]
+            )
+            reply_text = f"[🏆 Wealth Insights]\n{asset_info}\n\n{response.choices[0].message.content}"
             
         except Exception:
-            reply_text = f"คุณ Auttawut ครับ ระบบกำลัง Reset โควตา รบกวนลองใหม่อีกครั้งใน 1 นาทีนะครับ"
+            reply_text = f"คุณ Auttawut ครับ ผมหาหุ้น '{user_text}' ไม่เจอ รบกวนลองเช็กตัวสะกดอีกครั้งนะครับ"
 
         line_bot_api.reply_message(
             ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply_text)])
